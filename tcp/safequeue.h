@@ -46,6 +46,24 @@ public:
 		queue_.pop();
 	}
 
+	bool try_pop(T& item)
+	{
+		std::unique_lock<std::mutex> mlock(mutex_);
+
+		if (queue_.size() == 0) {
+			mlock.unlock();
+			return false;
+		}
+
+		item = queue_.front();
+		queue_.pop();
+
+		mlock.unlock();
+		return true;
+	}
+
+
+
 	void push(const T& item)
 	{
 		std::unique_lock<std::mutex> mlock(mutex_);

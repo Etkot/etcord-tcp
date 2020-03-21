@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <netinet/in.h>
 #include <vector>
+#include <unordered_map>
 #include <thread>
 #include "safequeue.h"
 #include "packet.h"
@@ -16,39 +17,39 @@ class tcp::Server
 {
 public:
 	// Constructor and deconstructor
-	Server(uint max_clients) : max_clients(max_clients) {}
+	Server() {}
 	~Server();
 
 
-	// Variables
-	std::vector<int> client_sockets;
-	SafeQueue<Packet>* messages;
-
 	// Methods
-	bool start(uint16_t port);
+	bool start(uint16_t& port);
+	void stop();
 
-	bool send_to_client(int socket, char* message, int length);
-	bool send_to_all(char* message, int length, int socket_excluded = 0);
+	bool get_next_packet(Packet& packet);
+	std::string get_client_address(int sd);
+
+	bool send(int socket, char* message, uint16_t length);
 
 private:
 	// Variables
 	uint16_t port;
-	uint max_clients;
 
 	struct sockaddr_in address;
 	int addrlen;
 
 	int master_socket;
 
+	std::vector<int> client_sockets;
+	SafeQueue<Packet>* packets;
+
 	bool running;
 	std::thread* listen_thread;
+	int stop_pipe;
 
 
 	// Methods
 	void listen();
-	void handle_new_connection();
-
-	void close_all_connections();
+	void close_all_client_connections();
 };
 
 #endif // TCPSERVER_H
