@@ -25,15 +25,20 @@ public:
 	// Methods
 	bool get_next_packet(Packet& packet);
 
+	void set_log_function(void(*f)(std::string));
+
 protected:
 	// Methods
-	int close_socket(SOCKET sock);
-	void log_socket_error(std::string msg);
-	void log_error(std::string msg);
+	int close_socket(const SOCKET& sock);
+
+	void log_socket_error(const std::string& msg);
+	void log_error(const std::string& msg);
 
 
 	// Variables
 	SafeQueue<Packet>* packets;
+
+	void(*log_func)(std::string) = nullptr;
 };
 
 

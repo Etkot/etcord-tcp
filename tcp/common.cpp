@@ -7,7 +7,12 @@ bool tcp::Common::get_next_packet(Packet& packet)
 	return packets->try_pop(packet);
 }
 
-void tcp::Common::log_socket_error(std::string msg)
+void tcp::Common::set_log_function(void (*f)(std::string))
+{
+	log_func = f;
+}
+
+void tcp::Common::log_socket_error(const std::string& msg)
 {
 #ifdef _WIN32
 	int err_code = WSAGetLastError();
@@ -22,18 +27,19 @@ void tcp::Common::log_socket_error(std::string msg)
 
 	log_error(msg + " (" + std::to_string(err_code) + "): " + error_str);
 
-	LocalFree(s);
+	LocalFree((LPWSTR)&s);
 #else
 	perror(msg);
 #endif
 }
 
-void tcp::Common::log_error(std::string msg)
+void tcp::Common::log_error(const std::string& msg)
 {
-	std::cout << msg << std::endl;
+	if (log_func)
+		log_func(msg);
 }
 
-int tcp::Common::close_socket(SOCKET sock)
+int tcp::Common::close_socket(const SOCKET& sock)
 {
 	int status = 0;
 

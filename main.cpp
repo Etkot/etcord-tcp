@@ -7,16 +7,23 @@
 #include <string>
 #include <cstring>
 
+void log_error(std::string msg);
 void start_server(uint16_t port);
 void start_client(std::string address, uint16_t port);
 
 
+void log_error(std::string msg)
+{
+	std::cout << "TCP: " << msg << std::endl;
+}
 
 void start_server(uint16_t port)
 {
 	std::cout << "MAIN: Starting server on port " << port << std::endl;
 
 	tcp::Server *server = new tcp::Server();
+	server->set_log_function(log_error);
+
 	bool success = server->start(port);
 
 	if (!success)
@@ -66,6 +73,8 @@ void start_client(std::string address, uint16_t port)
 	std::cout << "MAIN: Connecting to " << address << ":" << port << std::endl;
 
 	tcp::Client *client = new tcp::Client();
+	client->set_log_function(log_error);
+
 	bool success = client->connect(address.c_str(), port);
 
 	if (!success) {
