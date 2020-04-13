@@ -1,18 +1,17 @@
 #include "server.h"
+
 #include <stdio.h>
 #include <string.h>		//strlen
 #include <stdlib.h>
 #include <errno.h>
-#include <unistd.h>		//close
-#include <arpa/inet.h>	//close
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <sys/time.h>	//FD_SET, FD_ISSET, FD_ZERO macros
+
 #include <algorithm>
 #include <map>
 
 #define TRUE   1
 #define FALSE  0
+
+
 
 namespace tcp {
 	struct PacketBuffer
@@ -24,14 +23,26 @@ namespace tcp {
 }
 
 
+tcp::Server::Server()
+{
+#ifdef _WIN32
+	WSADATA wsa_data;
+	WSAStartup(MAKEWORD(1,1), &wsa_data);
+#endif
+}
 
 tcp::Server::~Server()
 {
 	stop();
+
+#ifdef _WIN32
+	WSACleanup();
+#endif
+
 	delete packets;
 }
 
-bool tcp::Server::start(uint16_t& port)
+bool tcp::Server::start(const uint16_t& port)
 {
 	if (running) {
 		return false;
@@ -42,7 +53,7 @@ bool tcp::Server::start(uint16_t& port)
 	// Create a master socket
 	if( (master_socket = socket(AF_INET , SOCK_STREAM , 0)) == 0)
 	{
-		perror("socket failed");
+		log_socket_error("socket failed");
 		return false;
 	}
 
@@ -50,7 +61,8 @@ bool tcp::Server::start(uint16_t& port)
 	// this is just a good habit, it will work without this
 	if( setsockopt(master_socket, SOL_SOCKET, SO_REUSEADDR, (char *)&opt, sizeof(opt)) < 0 )
 	{
-		perror("setsockopt");
+		log_socket_error("setsockopt");
+
 		return false;
 	}
 
@@ -60,9 +72,9 @@ bool tcp::Server::start(uint16_t& port)
 	address.sin_port = htons( port );
 
 	// Bind the socket to localhost port
-	if (bind(master_socket, (struct sockaddr *)&address, sizeof(address))<0)
+	if (bind(master_socket, (struct sockaddr *)&address, sizeof(address)) < 0)
 	{
-		perror("bind failed");
+		log_socket_error("bind failed");
 		return false;
 	}
 	//printf("listener on port %d \n", port);
@@ -70,7 +82,7 @@ bool tcp::Server::start(uint16_t& port)
 	// Try to specify maximum of 3 pending connections for the master socket
 	if (::listen(master_socket, 3) < 0)
 	{
-		perror("listen");
+		log_socket_error("listen");
 		return false;
 	}
 
@@ -92,37 +104,41 @@ void tcp::Server::stop()
 		return;
 	}
 
+	running = false;
+
 	close_all_client_connections();
 	//close(master_socket);
 
-	running = false;
+#ifndef _WIN32
 	write(stop_pipe, "0", 1);
+#endif
+
 	listen_thread->join();
 	delete listen_thread;
 }
 
 
-bool tcp::Server::get_next_packet(Packet& packet) {
-	return packets->try_pop(packet);
-}
-
-std::string tcp::Server::get_client_address(int sd) {
+std::string tcp::Server::get_client_address(const SOCKET& sd) {
 	struct sockaddr_in addr;
 	int _addrlen;
 
 	getpeername(sd, (struct sockaddr*)&addr, (socklen_t*)&_addrlen);
+
 	return std::string(inet_ntoa(addr.sin_addr));
 }
 
 
-bool tcp::Server::send(int socket, char* message, uint16_t length)
+bool tcp::Server::send(const SOCKET& socket, const char* message, const uint16_t& length)
 {
-	char packet[length + 2];
+	char* packet = new char[length + 2];
 	memcpy(packet + 2, message, length);
-	packet[0] = length >> 8;
-	packet[1] = length;
+	packet[0] = (char)(length >> 8);
+	packet[1] = (char)length;
 
-	return ::send(socket, packet, length + 2, 0) == length;
+	int res = ::send(socket, packet, length + 2, 0) == length;
+
+	delete[] packet;
+	return res;
 }
 
 
@@ -131,8 +147,9 @@ bool tcp::Server::send(int socket, char* message, uint16_t length)
 
 void tcp::Server::listen()
 {
-	int activity, valread, sd, max_sd, new_socket;
-	uint i;
+	int activity, valread;
+	SOCKET sd, max_sd, new_socket;
+	unsigned int i;
 
 	//set of socket descriptors
 	fd_set readfds;
@@ -141,13 +158,15 @@ void tcp::Server::listen()
 	char header[2];
 	uint16_t payload_size;
 
+#ifndef _WIN32
 	// Setup pipe for stopping
 	int pipefd[2];
 	if (::pipe(pipefd) == -1) {
-		perror("pipe");
+		log_error("pipe")
 		return;
 	}
 	stop_pipe = pipefd[1];
+#endif
 
 	while(running)
 	{
@@ -158,10 +177,12 @@ void tcp::Server::listen()
 		FD_SET(master_socket, &readfds);
 		max_sd = master_socket;
 
+#ifndef _WIN32
 		// Add stop pipe to set
 		FD_SET(pipefd[0], &readfds);
 		if (pipefd[0] > max_sd)
 			max_sd = pipefd[0];
+#endif
 
 		// Add client sockets to set
 		for (i = 0; i < client_sockets.size(); i++)
@@ -171,15 +192,23 @@ void tcp::Server::listen()
 				max_sd = client_sockets[i];
 		}
 
-		// Wait for an activity on one of the sockets, timeout is NULL,
-		// so wait indefinitely
+		// Wait for an activity on one of the sockets, timeout is NULL, so wait indefinitely
 		// (change to epoll?)
+#ifdef _WIN32
+		timeval time;
+		time.tv_sec = 1;
+		time.tv_usec = 0;
+		activity = select((int)max_sd + 1, &readfds, nullptr, nullptr, &time);
+#else
 		activity = select(max_sd + 1, &readfds, NULL, NULL, NULL);
+#endif
 
 		if ((activity < 0) && (errno!=EINTR))
 		{
 			printf("select error");
 		}
+
+		if (!running) break;
 
 		// Check IO operations from sockets before accepting new sockets
 		// so that they arent automatically set
@@ -190,28 +219,32 @@ void tcp::Server::listen()
 			{
 				// Check if it was for closing, and also read the
 				// incoming message
-				if ((valread = ::read(sd, header, 2)) == 0)
+				if ((valread = ::recv(sd, header, 2, NULL)) == -1)
+				{
+					log_socket_error("recv error");
+				}
+				else if (valread == 0)
 				{
 					// Somebody disconnected
 					packets->push({ sd, PacketType::Disconnect, nullptr, 0 });
 
 					// Close the socket and mark as 0 in list for reuse
-					close(sd);
+					close_socket(sd);
 					client_sockets[i] = 0;
 				}
 				else
 				{
 					if (valread != 2) {
-						printf("Client sent an invalid header\n");
+						log_error("Client sent a header with invalid size");
 					}
 
 					// Header should be big endian
-					payload_size = (header[0] << 8) + header[1];
+					payload_size = (uint16_t)((header[0] << 8) + header[1]);
 
 					if (payload_size > 0)
 					{
 						char* buffer = new char[payload_size];
-						if ((valread = ::read(sd, buffer, payload_size)) != 0)
+						if ((valread = ::recv(sd, buffer, payload_size, NULL)) != 0)
 						{
 							if (valread != payload_size)
 							{
@@ -233,7 +266,7 @@ void tcp::Server::listen()
 		{
 			if ((new_socket = accept(master_socket, (struct sockaddr *)&address, (socklen_t*)&addrlen)) < 0)
 			{
-				perror("accept");
+				log_socket_error("accept");
 			}
 
 			client_sockets.push_back(new_socket);
@@ -245,7 +278,7 @@ void tcp::Server::listen()
 			std::remove_if(
 				client_sockets.begin(),
 				client_sockets.end(),
-				[](int const& s) { return s == 0; }
+				[](SOCKET const& s) { return s == 0; }
 			),
 			client_sockets.end()
 		);
@@ -256,8 +289,8 @@ void tcp::Server::listen()
 
 void tcp::Server::close_all_client_connections()
 {
-	for (uint i = 0; i < client_sockets.size(); i++) {
-		close(client_sockets[i]);
+	for (unsigned int i = 0; i < client_sockets.size(); i++) {
+		close_socket(client_sockets[i]);
 	}
 
 	client_sockets.clear();

@@ -1,10 +1,7 @@
 #ifndef TCPCLIENT_H
 #define TCPCLIENT_H
 
-#include <string>
-
-#include "packet.h"
-#include "safequeue.h"
+#include "common.h"
 
 namespace tcp {
 	enum class Status;
@@ -13,7 +10,7 @@ namespace tcp {
 
 enum class tcp::Status { Unconnected=0, Connected=1, Disconnected=2 };
 
-class tcp::Client
+class tcp::Client: public Common
 {
 public:
 	Client();
@@ -21,23 +18,20 @@ public:
 
 
 	// Methods
-	bool connect(const char *address, uint16_t &port);
+	bool connect(const char* address, const uint16_t& port);
 	void disconnect();
 
-	bool get_next_packet(Packet& packet);
-	bool send(char *message, uint16_t length);
+	bool send(const char* message, const uint16_t& length);
 
-	Status get_status() { return status_; }
+	Status get_status() { return status; }
 
 private:
 	// Variables
-	int sock_ = 0;
-	Status status_;
+	SOCKET sock = 0;
+	Status status = Status::Unconnected;
 
 	std::thread* read_thread;
 	int stop_pipe;
-
-	SafeQueue<Packet>* packets;
 
 
 	// Methods

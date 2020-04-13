@@ -15,10 +15,10 @@ template <typename T>
 class tcp::SafeQueue
 {
 public:
-	uint count()
+	unsigned int count()
 	{
 		std::unique_lock<std::mutex> mlock(mutex_);
-		uint c = queue_.size();
+		unsigned int c = queue_.size();
 		mlock.unlock();
 		return c;
 	}

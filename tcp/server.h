@@ -1,48 +1,38 @@
 #ifndef TCPSERVER_H
 #define TCPSERVER_H
 
-#include <stdint.h>
-#include <netinet/in.h>
-#include <vector>
-#include <unordered_map>
-#include <thread>
-#include "safequeue.h"
-#include "packet.h"
+#include "common.h"
 
 namespace tcp {
 	class Server;
 }
 
-class tcp::Server
+class tcp::Server: public Common
 {
 public:
 	// Constructor and deconstructor
-	Server() {}
+	Server();
 	~Server();
 
 
 	// Methods
-	bool start(uint16_t& port);
+	bool start(const uint16_t& port);
 	void stop();
 
-	bool get_next_packet(Packet& packet);
-	std::string get_client_address(int sd);
+	std::string get_client_address(const SOCKET& sd);
 
-	bool send(int socket, char* message, uint16_t length);
+	bool send(const SOCKET& socket, const char* message, const uint16_t& length);
 
 private:
 	// Variables
-	uint16_t port;
-
 	struct sockaddr_in address;
 	int addrlen;
 
-	int master_socket;
+	SOCKET master_socket;
 
-	std::vector<int> client_sockets;
-	SafeQueue<Packet>* packets;
+	std::vector<SOCKET> client_sockets;
 
-	bool running;
+	bool running = false;
 	std::thread* listen_thread;
 	int stop_pipe;
 

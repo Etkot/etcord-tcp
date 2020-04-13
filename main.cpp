@@ -4,9 +4,12 @@
 #include "tcp/server.h"
 #include "tcp/client.h"
 
-
-#include <unistd.h>
+#include <string>
 #include <cstring>
+
+void start_server(uint16_t port);
+void start_client(std::string address, uint16_t port);
+
 
 
 void start_server(uint16_t port)
@@ -14,7 +17,13 @@ void start_server(uint16_t port)
 	std::cout << "MAIN: Starting server on port " << port << std::endl;
 
 	tcp::Server *server = new tcp::Server();
-	server->start(port);
+	bool success = server->start(port);
+
+	if (!success)
+	{
+		std::cout << "MAIN: Could not start server" << std::endl;
+		return;
+	}
 
 	tcp::Packet packet;
 	while (true)
@@ -32,11 +41,12 @@ void start_server(uint16_t port)
 			}
 			else if (packet.type == tcp::PacketType::Message)
 			{
-				std::string data = std::string(packet.data);
+				std::string data = std::string(packet.data, packet.length);
 
 				std::cout << "MAIN: Client send a message: '" << data << "'" << std::endl;
 
 				if (data == "hi") {
+					std::cout << "MAIN: sending 'hello'" << std::endl;
 					server->send(packet.sender, "hello", 5);
 				}
 				if (data == "stop")
@@ -71,6 +81,7 @@ void start_client(std::string address, uint16_t port)
 			if (packet.type == tcp::PacketType::Connect)
 			{
 				std::cout << "MAIN: Connected to server" << std::endl;
+				std::cout << "MAIN: sending 'hi'" << std::endl;
 				client->send("hi", 2);
 			}
 			else if (packet.type == tcp::PacketType::Disconnect)
@@ -79,11 +90,12 @@ void start_client(std::string address, uint16_t port)
 			}
 			else if (packet.type == tcp::PacketType::Message)
 			{
-				std::string data = std::string(packet.data);
+				std::string data = std::string(packet.data, packet.length);
 
 				std::cout << "MAIN: Server send a message: '" << data << "'" << std::endl;
 
 				if (data == "hello") {
+					std::cout << "MAIN: sending 'stop' and stopping" << std::endl;
 					client->send("stop", 4);
 					client->disconnect();
 					return;
@@ -127,7 +139,7 @@ int main()
 			try
 			{
 				address = input.substr(0, input.find(":"));
-				port = std::stoi(input.substr(input.find(":") + 1, input.length()));
+				port = (uint16_t)std::stoi(input.substr(input.find(":") + 1, input.length()));
 			}
 			catch (std::invalid_argument)
 			{
@@ -145,7 +157,7 @@ int main()
 		{
 			try
 			{
-				port = std::stoi(input);
+				port = (uint16_t)std::stoi(input);
 			}
 			catch (std::invalid_argument)
 			{
@@ -164,6 +176,9 @@ int main()
 	{
 		start_server(port);
 	}
+
+	std::cout << "End" << std::endl;
+	std::cin.get();
 
 	return EXIT_SUCCESS;
 }
