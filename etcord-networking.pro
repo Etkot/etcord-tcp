@@ -1,12 +1,13 @@
-TEMPLATE = app
+TEMPLATE = lib
+TARGET = StaticLib
+
+CONFIG += staticlib
 CONFIG += console c++11
-CONFIG -= app_bundle
-CONFIG -= qt
 
 QMAKE_CXXFLAGS += -std=c++0x -pthread
 LIBS += -pthread
 
-SOURCES += main.cpp \
+SOURCES += \
     tcp/common.cpp \
     tcp/server.cpp \
     tcp/client.cpp
