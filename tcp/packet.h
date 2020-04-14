@@ -1,7 +1,10 @@
 #ifndef TCPPACKET_H
 #define TCPPACKET_H
 
+#include <stdint.h>
+
 #include "sockets.h"
+
 
 namespace tcp {
 	enum class PacketType;
@@ -15,7 +18,7 @@ struct tcp::Packet
 	SOCKET sender;
 	PacketType type;
 	char* data;
-	unsigned int length;
+	uint16_t length;
 };
 
 #endif // TCPPACKET_H
